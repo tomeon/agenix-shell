@@ -57,11 +57,23 @@
         defaultText = lib.literalExpression "<name>";
       };
 
+      setVar = mkOption {
+        type = types.bool;
+        default = true;
+        description = "Export the value of the secret in the variable named by {option}`name`.  ";
+      };
+
       namePath = mkOption {
         type = shellVarType;
         default = "${config.name}_PATH";
         description = "Name of the variable containing the path to the secret.";
         defaultText = lib.literalExpression "<name>_PATH";
+      };
+
+      setPathVar = mkOption {
+        type = types.bool;
+        default = true;
+        description = "Export the path to the decrypted secret file in the variable named by {option}`namePath`.  ";
       };
 
       file = mkOption {
@@ -192,35 +204,44 @@ in {
         type = types.functionTo types.str;
         internal = true;
         readOnly = true;
-        default = secret: ''
-          __agenix_shell_secret_path=${secret.path}
+        default = secret:
+          ''
+            __agenix_shell_secret_path=${secret.path}
 
-          # shellcheck disable=SC2193
-          if [ "$__agenix_shell_secret_path" != "${cfg.secretsPath}/${secret.name}" ]; then
-            mkdir -p "$(dirname "$__agenix_shell_secret_path")"
-          fi
-
-          (
-            umask u=r,g=,o=
-
-            if ! test -f "${secret.file}"; then
-              echo 1>&2 '[agenix] WARNING: encrypted file ${secret.file} does not exist!'
+            # shellcheck disable=SC2193
+            if [ "$__agenix_shell_secret_path" != "${cfg.secretsPath}/${secret.name}" ]; then
+              mkdir -p "$(dirname "$__agenix_shell_secret_path")"
             fi
 
-            if ! test -d "$(dirname "$__agenix_shell_secret_path")"; then
-              echo 1>&2 "[agenix] WARNING: $(dirname "$__agenix_shell_secret_path") does not exist!"
-            fi
+            (
+              umask u=r,g=,o=
 
-            LANG=${config.i18n.defaultLocale or "C"} ${lib.getExe config.agenix-shell.agePackage} --decrypt "''${__agenix_shell_identities[@]}" -o "$__agenix_shell_secret_path" "${secret.file}"
-          )
+              if ! test -f "${secret.file}"; then
+                echo 1>&2 '[agenix] WARNING: encrypted file ${secret.file} does not exist!'
+              fi
 
-          chmod ${secret.mode} "$__agenix_shell_secret_path"
+              if ! test -d "$(dirname "$__agenix_shell_secret_path")"; then
+                echo 1>&2 "[agenix] WARNING: $(dirname "$__agenix_shell_secret_path") does not exist!"
+              fi
 
-          ${secret.name}=$(cat "$__agenix_shell_secret_path")
-          ${secret.namePath}="$__agenix_shell_secret_path"
-          export ${secret.name}
-          export ${secret.namePath}
-        '';
+              LANG=${config.i18n.defaultLocale or "C"} ${lib.getExe config.agenix-shell.agePackage} --decrypt "''${__agenix_shell_identities[@]}" -o "$__agenix_shell_secret_path" "${secret.file}"
+            )
+
+            chmod ${secret.mode} "$__agenix_shell_secret_path"
+
+            ${secret.name}=$(cat "$__agenix_shell_secret_path")
+            ${secret.namePath}="$__agenix_shell_secret_path"
+            export ${secret.name}
+            export ${secret.namePath}
+          ''
+          + (lib.optionalString secret.setVar ''
+            ${secret.name}=$(cat "$__agenix_shell_secret_path")
+            export ${secret.name}
+          '')
+          + (lib.optionalString secret.setPathVar ''
+            ${secret.namePath}="$__agenix_shell_secret_path"
+            export ${secret.namePath}
+          '');
       };
 
       installationScript = mkOption {
