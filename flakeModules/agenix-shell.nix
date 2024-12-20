@@ -24,7 +24,16 @@
         (lib.filterAttrs (_: names: lib.length names > 1))
       ];
 
-  duplicateShellVars = duplicateAttrValues ["name" "namePath"] cfg.secrets;
+  duplicateShellVarsLiteral = lib.pipe cfg.secrets [
+    (lib.filterAttrs (lib.const (lib.getAttr "setVar")))
+    (duplicateAttrValues ["name"])
+  ];
+
+  duplicateShellVarsPath = lib.pipe cfg.secrets [
+    (lib.filterAttrs (lib.const (lib.getAttr "setPathVar")))
+    (duplicateAttrValues ["namePath"])
+  ];
+
   duplicateFiles = duplicateAttrValues ["file"] cfg.secrets;
 
   shellVarHeadRanges = "_A-Za-z";
@@ -167,11 +176,17 @@ in {
             ''
               only the last secret using a given output file path will be written to that location.
             '')
-          + (formatDuplicates duplicateShellVars ''
+          + (formatDuplicates duplicateShellVarsLiteral ''
               the following variable names are used more than once in `agenix-shell.secrets`:
             ''
             ''
-              these variables will be set to the values associated with the last secret to use them.
+              these variables will be set to the value of the decrypted secret from the last secret to use them.
+            '')
+          + (formatDuplicates duplicateShellVarsPath ''
+              the following variable names are used more than once in `agenix-shell.secrets`:
+            ''
+            ''
+              these variables will be set to the path of the decrypted secret file from the last secret to use them.
             '')
           + ''
             # shellcheck disable=SC2086
@@ -229,11 +244,6 @@ in {
             )
 
             chmod ${secret.mode} "$__agenix_shell_secret_path"
-
-            ${secret.name}=$(cat "$__agenix_shell_secret_path")
-            ${secret.namePath}="$__agenix_shell_secret_path"
-            export ${secret.name}
-            export ${secret.namePath}
           ''
           + (lib.optionalString secret.setVar ''
             ${secret.name}=$(cat "$__agenix_shell_secret_path")
