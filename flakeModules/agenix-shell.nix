@@ -123,6 +123,8 @@ in {
         Path to SSH keys to be used as identities in age decryption.
       '';
     };
+
+    cleanSecretsOnExit = lib.mkEnableOption "removing the secret directory upon devshell exit";
   };
 
   options.perSystem = mkPerSystemOption ({
@@ -181,6 +183,22 @@ in {
 
             mkdir -p "${cfg.secretsPath}"
           ''
+          + (lib.optionalString cfg.cleanSecretsOnExit ''
+            __agenix_shell_cleanup() {
+              local secretsPath=${cfg.secretsPath}
+              if [ -n "$secretsPath" ]; then
+                rm --one-file-system --preserve-root -rf "$secretsPath" 2>/dev/null || rm -rf "$secretsPath"
+              fi
+            }
+
+            if __agenix_shell_current_exit_trap_output="$(trap -p EXIT)" && [ -n "$__agenix_shell_current_exit_trap_output" ]; then
+              read -r _ _ __agenix_shell_current_exit_trap_and_signal <<<"$__agenix_shell_current_exit_trap_output"
+              __agenix_shell_current_exit_trap="''${__agenix_shell_current_exit_trap_and_signal% EXIT}"
+              trap "''${__agenix_shell_current_exit_trap:-:}; __agenix_shell_cleanup"
+            else
+              trap __agenix_shell_cleanup EXIT
+            fi
+          '')
           + lib.concatStrings (lib.mapAttrsToList (_: config.agenix-shell._installSecret) cfg.secrets)
           + ''
             # Clean up after ourselves
