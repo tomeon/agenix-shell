@@ -228,7 +228,7 @@ in {
               trap __agenix_shell_cleanup EXIT
             fi
           '')
-          + lib.concatStrings (lib.mapAttrsToList (_: config.agenix-shell._installSecret) cfg.secrets)
+          + lib.concatStrings (lib.mapAttrsToList config.agenix-shell._installSecret cfg.secrets)
           + ''
             # Clean up after ourselves
             # shellcheck disable=SC2154
@@ -237,12 +237,14 @@ in {
       };
 
       _installSecret = mkOption {
-        type = types.functionTo types.str;
+        type = types.functionTo (types.functionTo types.str);
         internal = true;
         readOnly = true;
-        default = secret:
+        default = name: secret:
           ''
             __agenix_shell_secret_path=${secret.path}
+
+            printf 1>&2 -- '[agenix] decrypting secret %q from %q to %q...\n' ${lib.escapeShellArgs [name secret.file]} "$__agenix_shell_secret_path"
 
             # shellcheck disable=SC2193
             if [ "$__agenix_shell_secret_path" != "${cfg.secretsPath}/${secret.name}" ]; then
