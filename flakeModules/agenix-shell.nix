@@ -126,12 +126,15 @@ in {
       description = "Command returning the name of the flake, used as part of the secrets path.";
     };
 
-    secretsPath = mkOption {
-      type = types.str;
-      default = ''/run/user/$(id -u)/agenix-shell/$(${cfg.flakeName})/$(uuidgen)'';
-      defaultText = lib.literalExpression ''"/run/user/$(id -u)/agenix-shell/$(''${config.agenix-shell.flakeName})/$(uuidgen)"'';
-      description = "Where the secrets are stored.";
-    };
+    secretsPath = let
+      mkSecretsPath = flakeName: ''"''${XDG_RUNTIME_DIR:-"/run/user/''${EUID:-$(id -u)}"}/agenix-shell/$(${flakeName})/$(uuidgen)"'';
+    in
+      mkOption {
+        type = types.str;
+        default = mkSecretsPath cfg.flakeName;
+        defaultText = lib.literalExpression (mkSecretsPath "\${config.agenix-shell.flakeName}");
+        description = "Where the secrets are stored.";
+      };
 
     identityPaths = mkOption {
       type = types.listOf types.str;
